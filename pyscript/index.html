@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusTech - PyScript Web Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- PyScript Releases (WASM / Pyodide) -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2023.05.1/pyscript.css" />
+    <script defer src="https://pyscript.net/releases/2023.05.1/pyscript.js"></script>
+
+    <!-- Configuración para dependencias de Python si se requieren -->
+    <py-config>
+        packages = []
+    </py-config>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <header class="border-b border-slate-700 pb-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-indigo-400">NexusTech Web Dashboard</h1>
+                <p class="text-sm text-slate-400">Ejecución nativa de Python en el navegador vía PyScript (WASM)</p>
+            </div>
+            <span class="bg-indigo-900/50 text-indigo-300 text-xs px-3 py-1 rounded-full border border-indigo-700">
+                Módulo 6.8
+            </span>
+        </header>
+
+        <!-- Panel de Control -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl space-y-4">
+            <h2 class="text-xl font-semibold text-slate-200">Consumo Asíncrono e Interoperabilidad DOM</h2>
+            <div class="flex flex-wrap gap-4">
+                <button id="btn-fetch"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg transition-all shadow-lg shadow-indigo-600/30 cursor-pointer">
+                    ⚡ Cargar Datos desde API (Python)
+                </button>
+                <button id="btn-clear"
+                        class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium px-5 py-2.5 rounded-lg transition-all cursor-pointer">
+                    🗑️ Limpiar DOM
+                </button>
+            </div>
+            <div id="status-msg" class="text-sm text-slate-400 italic">
+                Esperando interacción del usuario...
+            </div>
+        </div>
+
+        <!-- Tabla de Datos -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
+            <h3 class="text-lg font-medium text-slate-300 mb-4">Inventario Remoto Sincronizado</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-900/50 text-slate-400 uppercase text-xs">
+                        <tr>
+                            <th class="p-3">ID</th>
+                            <th class="p-3">Producto</th>
+                            <th class="p-3">Categoría</th>
+                            <th class="p-3">Precio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-slate-500">Sin datos cargados. Haz clic en el botón superior.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar script de Python dinámico -->
+    <py-script src="./main.py"></py-script>
+</body>
+</html>

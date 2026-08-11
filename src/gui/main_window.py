@@ -6,8 +6,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QAction, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 # Importación de componentes locales
 from src.gui.widgets.custom_charts import StockChartWidget
+from src.core.signals import signals  # Bus de Señales Centralizado (Modulo 6.4)
 
 # Importación segura de la base de datos
 try:
@@ -39,8 +40,8 @@ except ImportError:
 
 class MainWindow(QMainWindow):
     """
-    Ventana Principal Avanzada PySide6/Qt para NexusTech Solutions (Módulo 6.3).
-    Implementa QTableWidget, QSS Theme, Menús y Custom QPainter Widget.
+    Ventana Principal Avanzada PySide6/Qt para NexusTech Solutions.
+    Módulos 6.3 (QTableWidget, QSS, QPainter) + 6.4 (Signals, Slots, Event Handlers).
     """
 
     def __init__(self):
@@ -66,7 +67,10 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._setup_ui()
 
-        # Cargar datos de prueba o SQLite
+        # Conectar Señales y Slots del Módulo 6.4
+        self._connect_signals()
+
+        # Cargar datos iniciales
         self.load_inventory_data()
 
     def _apply_qss_theme(self):
@@ -128,7 +132,7 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addSpacing(20)
 
-        btn_refresh = QPushButton("🔄 Actualizar")
+        btn_refresh = QPushButton("🔄 Actualizar (F5)")
         btn_refresh.clicked.connect(self.load_inventory_data)
         sidebar_layout.addWidget(btn_refresh)
 
@@ -138,7 +142,6 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(btn_add_mock)
 
         sidebar_layout.addStretch()
-
         main_layout.addWidget(sidebar)
 
         # --- CONTENIDO PRINCIPAL ---
@@ -156,7 +159,6 @@ class MainWindow(QMainWindow):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["ID", "SKU", "Nombre", "Stock", "Precio ($)"])
 
-        # Modo de ajuste de encabezados para PySide6
         header = self.table.horizontalHeader()
         if hasattr(QHeaderView, "ResizeMode"):
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -165,7 +167,7 @@ class MainWindow(QMainWindow):
 
         content_layout.addWidget(self.table)
 
-        # Widget Personalizado con QPainter (Entregable 6.3)
+        # Widget Personalizado con QPainter
         self.chart_widget = StockChartWidget()
         content_layout.addWidget(self.chart_widget)
 
@@ -175,6 +177,42 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Listo | Interfaz PySide6 cargada correctamente.")
+
+    # --- MÓDULO 6.4: CONEXIÓN DE SEÑALES Y SLOTS ---
+
+    def _connect_signals(self):
+        """Conecta las señales del bus desacoplado a slots locales."""
+        signals.status_changed.connect(self._on_status_changed)
+        signals.product_added.connect(self._on_product_added)
+
+    @Slot(str, str)
+    def _on_status_changed(self, message: str, level: str):
+        """Slot receptor para actualizar la barra de estado."""
+        prefix = f"[{level}] " if level else ""
+        self.status_bar.showMessage(f"{prefix}{message}")
+
+    @Slot(dict)
+    def _on_product_added(self, product_data: dict):
+        """Slot receptor al agregar un producto."""
+        self.load_inventory_data()
+        signals.status_changed.emit(
+            f"Producto '{product_data.get('name')}' agregado correctamente via Signal.",
+            "INFO",
+        )
+
+    # --- MÓDULO 6.4: SOBRESCRITURA DE EVENT HANDLERS (TECLADO) ---
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """Atrapa teclas presionadas en la ventana principal."""
+        if event.key() == Qt.Key_F5:
+            signals.status_changed.emit("Refrescando inventario mediante tecla F5...", "INFO")
+            self.load_inventory_data()
+        elif event.key() == Qt.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
+    # --- CARGA Y MANEJO DE DATOS ---
 
     def load_inventory_data(self):
         """Obtiene datos desde SQLite o genera datos demo si no hay conexión."""
@@ -186,7 +224,6 @@ class MainWindow(QMainWindow):
             except Exception:
                 products = []
 
-        # Si no hay datos en la BD todavía, cargar lista inicial demo
         if not products:
             products = [
                 {"id": 1, "sku": "NET-001", "name": "Servidor Rack 2U", "stock": 14, "price": 2500.00},
@@ -195,8 +232,8 @@ class MainWindow(QMainWindow):
             ]
 
         self.table.setRowCount(len(products))
-
         total_stock = 0
+
         for row, prod in enumerate(products):
             self.table.setItem(row, 0, QTableWidgetItem(str(prod["id"])))
             self.table.setItem(row, 1, QTableWidgetItem(str(prod["sku"])))
@@ -205,22 +242,32 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 4, QTableWidgetItem(f"${prod['price']:.2f}"))
             total_stock += prod["stock"]
 
-        # Actualizar el Widget de QPainter con la capacidad
         calculated_level = min(100, int((total_stock / 150.0) * 100))
         self.chart_widget.set_stock_level(calculated_level if calculated_level > 0 else 45)
 
-        self.status_bar.showMessage(f"Tabla actualizada: {len(products)} registros cargados.")
+        signals.status_changed.emit(f"Tabla actualizada: {len(products)} registros cargados.", "INFO")
 
     def _add_demo_item(self):
-        """Inserta un registro dinámico en la tabla."""
+        """Inserta un registro y emite una Signal."""
         import random
         num = random.randint(100, 999)
+        new_prod = {
+            "sku": f"SKU-{num}",
+            "name": f"Equipo Switch-{num}",
+            "category": "Redes",
+            "stock": random.randint(1, 20),
+            "price": 450.00,
+        }
+
         if self.db and hasattr(self.db, "create_product"):
             try:
-                self.db.create_product(f"SKU-{num}", f"Equipo Switch-{num}", "Redes", random.randint(1, 20), 450.00)
+                self.db.create_product(
+                    new_prod["sku"], new_prod["name"], new_prod["category"], new_prod["stock"], new_prod["price"]
+                )
             except Exception:
                 pass
-        self.load_inventory_data()
+
+        signals.product_added.emit(new_prod)
 
 
 if __name__ == "__main__":

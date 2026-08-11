@@ -39,3 +39,23 @@ Se ha seleccionado un enfoque orientado a eventos combinando **MVC/MVVM** para s
 * Principio de Responsividad: Ninguna llamada de red ni operación de escritura pesada en base de datos se ejecuta sobre el hilo principal (GUI Thread), evitando cuelgues o congelamientos ("Not Responding").
 
 * Retroalimentación Visual: Indicadores de estado de red y barras de progreso en segundo plano alimentadas por un sistema de señales desacoplado.
+
+### 4: Auto-crítica y Justificación de Decisiones (Rúbrica M6)
+1. Arquitectura y Escalabilidad
+* Elección del Framework: Se seleccionó PySide6 (Qt) como framework principal debido a su arquitectura nativa basada en el paradigma de Señales y Slots, lo que permite un desacoplamiento estricto entre la interfaz gráfica y la lógica de negocio.
+
+* Impacto en Rendimiento y Mantenibilidad: A diferencia de frameworks más simples como Tkinter, PySide6 ofrece aceleración por hardware para gráficos personalizados (QPainter), hojas de estilo asíncronas (QSS) y un sistema multihilo nativo (QThread). Esto garantiza mantenibilidad a largo plazo y una experiencia de usuario (UX) fluida bajo el tema oscuro Catppuccin.
+
+2. Gestión de Concurrencia y Resiliencia
+* Escenario de Operación Bloqueante: Al realizar peticiones HTTP a la API REST o ejecutar transacciones intensivas en SQLite, procesar estas tareas en el hilo principal congelaría la UI.
+
+* Solución Multihilo (QThread): Se desarrolló la clase SyncWorkerThread (src/utils/threads.py). Toda llamada I/O corre en segundo plano.
+
+* Comunicación Segura entre Hilos: Se implementó el bus de eventos EventBus (src/core/signals.py) derivado de QObject. Las señales sync_started, progress_updated, sync_completed y sync_failed garantizan la actualización segura del thread secundario hacia la UI sin provocar condiciones de carrera (Race Conditions).
+
+* Mecanismo de Caché y Resiliencia: En caso de fallos de red (URLError, timeouts), el cliente recupera los productos previamente guardados en la tabla api_cache de SQLite, permitiendo la continuidad operativa offline.
+
+3. Despliegue, Portabilidad y Web (PyScript)
+* Desafíos con PyInstaller: El mayor reto técnico consistió en vincular recursos estáticos (estilos .qss, DB) e importaciones ocultas de los submódulos de src/. Se resolvió configurando el archivo NexusTech.spec, mapeando las rutas en added_files e inyectando las dependencias en hiddenimports.
+
+* Portabilidad y Migración a PyScript: Para el Módulo 6.8 se adaptó la lógica asíncrona a PyScript / Pyodide (WebAssembly). A través de pyodide.ffi.create_proxy y la API Fetch de JavaScript, la aplicación ejecuta Python dentro del navegador y manipula el DOM sin requerir un backend activo.

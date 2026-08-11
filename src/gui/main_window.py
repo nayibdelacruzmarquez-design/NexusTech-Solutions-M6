@@ -22,11 +22,14 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QMessageBox,
     QFrame,
+    QProgressBar,  # Agregado para 6.5
+    QTextEdit,     # Agregado para 6.5
 )
 
 # Importación de componentes locales
 from src.gui.widgets.custom_charts import StockChartWidget
 from src.core.signals import signals  # Bus de Señales Centralizado (Modulo 6.4)
+from src.utils.threads import SyncWorkerThread  # Agregado para 6.5
 
 # Importación segura de la base de datos
 try:
@@ -41,24 +44,18 @@ except ImportError:
 class MainWindow(QMainWindow):
     """
     Ventana Principal Avanzada PySide6/Qt para NexusTech Solutions.
-    Módulos 6.3 (QTableWidget, QSS, QPainter) + 6.4 (Signals, Slots, Event Handlers).
+    Módulos: 6.3 (UI/QPainter), 6.4 (Signals/Slots) y 6.5 (Multihilo con QThread).
     """
 
     def __init__(self):
         super().__init__()
 
-        # Inicializar manejador de BD si existe
-        if DatabaseManager:
-            try:
-                self.db = DatabaseManager()
-            except Exception:
-                self.db = None
-        else:
-            self.db = None
+        self.db = DatabaseManager() if DatabaseManager else None
+        self.sync_thread = None  # Referencia del hilo secundario (Módulo 6.5)
 
         self.setWindowTitle("NexusTech Solutions - Gestión de Inventario (PySide6)")
-        self.resize(900, 650)
-        self.setMinimumSize(800, 500)
+        self.resize(950, 700)
+        self.setMinimumSize(850, 550)
 
         # Aplicar Hoja de Estilos QSS (Dark Theme Catppuccin)
         self._apply_qss_theme()
@@ -86,6 +83,9 @@ class MainWindow(QMainWindow):
             QTableWidget { background-color: #181825; gridline-color: #313244; border: 1px solid #313244; border-radius: 6px; selection-background-color: #45475A; selection-color: #89B4FA; }
             QHeaderView::section { background-color: #313244; color: #89B4FA; padding: 6px; font-weight: bold; border: none; }
             QStatusBar { background-color: #11111B; color: #A6ADC8; }
+            QProgressBar { border: 1px solid #313244; border-radius: 5px; text-align: center; background-color: #181825; color: #CDD6F4; }
+            QProgressBar::chunk { background-color: #89B4FA; border-radius: 4px; }
+            QTextEdit { background-color: #11111B; color: #A6E3A1; border: 1px solid #313244; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; }
         """
         self.setStyleSheet(qss)
 
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         # --- SIDEBAR LATERAL ---
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(200)
+        sidebar.setFixedWidth(210)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(15, 20, 15, 20)
 
@@ -141,7 +141,19 @@ class MainWindow(QMainWindow):
         btn_add_mock.clicked.connect(self._add_demo_item)
         sidebar_layout.addWidget(btn_add_mock)
 
+        # Botón del Módulo 6.5 (Sincronización Multihilo)
+        self.btn_sync = QPushButton("⚡ Sincronizar API")
+        self.btn_sync.clicked.connect(self.start_async_sync)
+        sidebar_layout.addWidget(self.btn_sync)
+
         sidebar_layout.addStretch()
+
+        # Barra de Progreso del Módulo 6.5
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFixedHeight(18)
+        sidebar_layout.addWidget(self.progress_bar)
+
         main_layout.addWidget(sidebar)
 
         # --- CONTENIDO PRINCIPAL ---
@@ -171,6 +183,16 @@ class MainWindow(QMainWindow):
         self.chart_widget = StockChartWidget()
         content_layout.addWidget(self.chart_widget)
 
+        # Consola de Eventos y Logs en Tiempo Real (Evidencia no falsificable Módulo 6.5)
+        lbl_logs = QLabel("Consola de Eventos & Hilos Asíncronos:")
+        lbl_logs.setStyleSheet("font-weight: bold; font-size: 11px; color: #A6ADC8;")
+        content_layout.addWidget(lbl_logs)
+
+        self.log_console = QTextEdit()
+        self.log_console.setReadOnly(True)
+        self.log_console.setFixedHeight(90)
+        content_layout.addWidget(self.log_console)
+
         main_layout.addWidget(content_area)
 
         # Barra de Estado
@@ -199,6 +221,35 @@ class MainWindow(QMainWindow):
             f"Producto '{product_data.get('name')}' agregado correctamente via Signal.",
             "INFO",
         )
+
+    # --- MÓDULO 6.5: LÓGICA DE MULTIHILO (QTHREAD) ---
+
+    def start_async_sync(self):
+        """Inicia la tarea en segundo plano sin congelar la UI."""
+        if self.sync_thread and self.sync_thread.isRunning():
+            QMessageBox.warning(self, "Proceso Activo", "Ya hay una sincronización en curso.")
+            return
+
+        self.btn_sync.setEnabled(False)
+        self.progress_bar.setValue(0)
+
+        self.sync_thread = SyncWorkerThread(items_to_process=5)
+        self.sync_thread.progress_changed.connect(self.progress_bar.setValue)
+        self.sync_thread.log_emitted.connect(self._append_log)
+        self.sync_thread.sync_finished.connect(self._on_sync_finished)
+        self.sync_thread.start()
+
+    @Slot(str)
+    def _append_log(self, text: str):
+        """Escribe mensajes en la consola en tiempo real."""
+        self.log_console.append(text)
+
+    @Slot(bool, str)
+    def _on_sync_finished(self, success: bool, message: str):
+        """Se ejecuta al terminar el hilo secundario."""
+        self.btn_sync.setEnabled(True)
+        signals.status_changed.emit(message, "SUCCESS" if success else "ERROR")
+        self.load_inventory_data()
 
     # --- MÓDULO 6.4: SOBRESCRITURA DE EVENT HANDLERS (TECLADO) ---
 

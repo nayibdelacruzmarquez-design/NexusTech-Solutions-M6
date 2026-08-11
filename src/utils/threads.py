@@ -1,51 +1,60 @@
 import time
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal
+# Importación corregida apuntando a la capa src.data
+from src.data.api_client import InventoryApiClient
+from src.data.database import DatabaseManager
 
 
 class SyncWorkerThread(QThread):
     """
-    Hilo secundario (QThread) para tareas pesadas en segundo plano (Módulo 6.5).
-    Garantiza que la UI no se congele durante procesos síncronos o consumo de APIs.
+    Hilo secundario (QThread) para ejecutar el consumo de la API
+    y el guardado en SQLite sin congelar la UI.
     """
 
-    progress_changed = Signal(int)  # Envía porcentaje (0-100)
-    log_emitted = Signal(str)  # Envía log con timestamp
-    sync_finished = Signal(bool, str)  # Envía estado final (éxito, mensaje)
+    progress_changed = Signal(int)
+    log_emitted = Signal(str)
+    sync_finished = Signal(bool, str)
 
-    def __init__(self, items_to_process: int = 5, parent=None):
+    def __init__(self, items_to_process=5, parent=None):
         super().__init__(parent)
         self.items_to_process = items_to_process
-        self._is_running = True
+        self.db = DatabaseManager()
+        self.api_client = InventoryApiClient(self.db)
 
     def run(self):
-        """Ejecución del hilo en segundo plano."""
         try:
             self.log_emitted.emit(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [THREAD] Iniciando sincronización asíncrona...")
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [THREAD] Conectando con API externa REST..."
+            )
+            self.progress_changed.emit(20)
+            time.sleep(0.5)
 
-            for i in range(1, self.items_to_process + 1):
-                if not self._is_running:
-                    self.log_emitted.emit(
-                        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [THREAD] Proceso cancelado.")
-                    return
+            # Consumo de API REST + Resiliencia / Caché
+            products, is_cache, msg = self.api_client.fetch_external_products()
+            self.progress_changed.emit(60)
 
-                # Simulación de carga/latencia (1 segundo por bloque)
-                time.sleep(1.0)
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.log_emitted.emit(f"[{timestamp}] [API] {msg}")
 
-                percentage = int((i / self.items_to_process) * 100)
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            if products:
+                for prod in products:
+                    try:
+                        self.db.create_product(
+                            prod["sku"], prod["name"], prod["category"], prod["stock"], prod["price"]
+                        )
+                    except Exception:
+                        pass  # Evita errores si el SKU ya existe
 
-                self.progress_changed.emit(percentage)
+                self.progress_changed.emit(100)
                 self.log_emitted.emit(
-                    f"[{timestamp}] [THREAD] Lote {i}/{self.items_to_process} procesado ({percentage}%)")
-
-            self.sync_finished.emit(True, "Sincronización masiva completada.")
-            self.log_emitted.emit(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [THREAD] Hilo secundario finalizado con éxito.")
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [DB] Registros guardados exitosamente en SQLite."
+                )
+                self.sync_finished.emit(
+                    True, f"Sincronización finalizada. {'(Desde Caché)' if is_cache else '(Online)'}"
+                )
+            else:
+                self.sync_finished.emit(False, "No se pudieron obtener datos.")
 
         except Exception as e:
-            self.sync_finished.emit(False, f"Error en el hilo: {str(e)}")
-
-    def stop(self):
-        self._is_running = False
+            self.sync_finished.emit(False, f"Error en hilo de sincronización: {str(e)}")

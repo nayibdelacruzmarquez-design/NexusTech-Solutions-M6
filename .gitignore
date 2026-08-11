@@ -1,0 +1,19 @@
+# Python / PyCharm
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+.idea/
+
+# PyInstaller / Build outputs
+build/
+dist/
+*.spec.bak
+
+# Base de datos local temporal (se creará al ejecutar)
+nexus_local.db
+
+# Logs locales de prueba (guardaremos solo app.log específico)
+*.log
+!app.log

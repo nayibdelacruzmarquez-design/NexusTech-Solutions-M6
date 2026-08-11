@@ -1,6 +1,11 @@
 # NexusTech Solutions - M6
 Aplicación modular de escritorio desarrollada en Python con **PySide6**, persistencia en **SQLite**, resiliencia offline ante fallos de API REST, ejecución multihilo asíncrona y dashboard web con **PyScript (WebAssembly)**.
-
+**Repositorio GitHub:** https://github.com/NayibDeLaCruz/NexusTech_Solutions_M6
+---
+## 🎥 Video de Defensa
+* **Enlace al Video:** [Ver Defensa en Vivo de NexusTech Solutions](https://drive.google.com/file/d/1eMrMP_YlvbOLlPprZ3Zh-fbfVv5Jg-lP/view?usp=drive_link)
+* **Duración:** ~7 minutos
+* **Contenido:** Demostración en vivo de la aplicación PySide6, gestión CRUD, sincronización de API en segundo plano con `QThread`, resiliencia offline SQLite, prototipo web en PyScript (WASM) y respuestas a las preguntas de arquitectura.
 ---
 
 ## Requisitos Previos
@@ -48,7 +53,7 @@ Para ejecutar la lógica Python en el navegador:
 ## Pruebas Unitarias
 Para verificar la creación de tablas y la integridad de SQLite:
    ```bash
-    python -m unittest tests/test_database.py
+    python -m unittest discover -s tests
    ```
 
 ## Archivos de Evidencia (Sección 8)
@@ -57,4 +62,3 @@ Para verificar la creación de tablas y la integridad de SQLite:
 * pyinstaller_build_log.txt: Log crudo del empaquetado del ejecutable.
 
 * docs/screenshots/: Capturas de pantalla de la app en modo Online, Offline/Resiliencia, Executable y PyScript Web.
-* 
